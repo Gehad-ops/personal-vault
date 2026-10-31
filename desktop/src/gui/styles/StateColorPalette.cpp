@@ -17,11 +17,17 @@
 
 #include "StateColorPalette.h"
 
+#include <QApplication>
+#include <QPalette>
+
 #include "gui/Application.h"
 
 StateColorPalette::StateColorPalette()
 {
-    if (kpxcApp->isDarkTheme()) {
+    // PersonalVault uses QApplication rather than KeePassXC's Application.
+    const bool dark = kpxcApp ? kpxcApp->isDarkTheme()
+                              : (QApplication::palette().color(QPalette::Window).lightness() < 128);
+    if (dark) {
         initDefaultPaletteDark();
     } else {
         initDefaultPaletteLight();
