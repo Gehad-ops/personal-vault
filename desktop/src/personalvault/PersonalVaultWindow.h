@@ -48,6 +48,8 @@ private:
     void copyText(const QString& text, const QString& label);
     void saveDatabase();
     void showSettingsMenu();
+    void lockVault();
+    void attachDatabase(const QSharedPointer<Database>& db, const QString& path);
     void addRecent(const QString& path);
     QStringList recentFiles() const;
 
@@ -68,7 +70,6 @@ private:
     QLabel* m_status = nullptr;
     QLabel* m_health = nullptr;
     QLabel* m_healthRing = nullptr;
-    QLabel* m_autoLock = nullptr;
     QHBoxLayout* m_tagsLayout = nullptr;
     QHash<QString, QPushButton*> m_navButtons;
     QPushButton* m_allButton = nullptr;

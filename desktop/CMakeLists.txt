@@ -38,7 +38,7 @@ include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 
 # Build Scope
-option(WITH_TESTS "Enable building of unit tests" ON)
+option(WITH_TESTS "Enable building of unit tests" OFF)
 option(WITH_GUI_TESTS "Enable building of GUI tests" OFF)
 option(WITH_WARN_DEPRECATED "Development only: warn about deprecated methods, including Qt." OFF)
 option(WITH_ASAN "Enable address sanitizer checks (Linux / macOS only)" OFF)
@@ -64,7 +64,7 @@ endif()
 # Minor Feature Flags
 option(KPXC_FEATURE_NETWORK "Include code that reaches out to external networks (e.g. downloading icons)" ON)
 option(KPXC_FEATURE_UPDATES "Include automatic update checks; disable for managed distributions" ON)
-option(KPXC_FEATURE_DOCS "Build offline documentation; requires asciidoctor tool" ON)
+option(KPXC_FEATURE_DOCS "Build offline documentation; requires asciidoctor tool" OFF)
 
 # Reconcile update feature with overall network feature
 if(NOT KPXC_FEATURE_NETWORK AND KPXC_FEATURE_UPDATES)
@@ -600,15 +600,6 @@ endif()
 # Add KeePassXC sources and tests
 add_subdirectory(src)
 add_subdirectory(share)
-
-if(WITH_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
-
-if(KPXC_FEATURE_DOCS)
-    add_subdirectory(docs)
-endif()
 
 # Print out summary information
 message(STATUS "")

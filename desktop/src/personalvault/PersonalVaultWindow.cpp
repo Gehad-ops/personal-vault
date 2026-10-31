@@ -21,18 +21,23 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QCheckBox>
+#include <QKeySequence>
+#include <QShortcut>
 #include <QSizeGrip>
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QSettings>
 #include <QWindow>
 #include <QSplitter>
+#include <QStyle>
 #include <QStatusBar>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <functional>
 
 #include "browser/BrowserService.h"
 #include "browser/BrowserSettings.h"
@@ -73,6 +78,19 @@ QPair<QColor, QColor> avatarFor(const QString& title)
         hash = hash * 31 + ch.unicode();
     }
     return avatarPalette().at(hash % avatarPalette().size());
+}
+
+QString prettyType(const QString& type)
+{
+    if (type == QStringLiteral("totp")) {
+        return QStringLiteral("TOTP");
+    }
+    return type.left(1).toUpper() + type.mid(1);
+}
+
+void setLabelRole(QLabel* label, const char* name)
+{
+    label->setObjectName(QString::fromLatin1(name));
 }
 
 void clearLayout(QLayout* layout)
@@ -119,6 +137,61 @@ protected:
     }
 };
 
+class UnlockDialog : public QDialog
+{
+public:
+    UnlockDialog(const QString& fileName, QWidget* parent)
+        : QDialog(parent)
+    {
+        setWindowTitle(tr("Unlock vault"));
+        setMinimumWidth(380);
+        auto* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(24, 24, 24, 20);
+        layout->setSpacing(10);
+
+        auto* title = new QLabel(tr("Unlock vault"));
+        setLabelRole(title, "dialogTitle");
+        auto* sub = new QLabel(fileName);
+        setLabelRole(sub, "mutedLabel");
+        m_password = new QLineEdit();
+        m_password->setEchoMode(QLineEdit::Password);
+        m_password->setPlaceholderText(tr("Master password"));
+        auto* show = new QCheckBox(tr("Show password"));
+        connect(show, &QCheckBox::toggled, this, [this](bool on) {
+            m_password->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password);
+        });
+
+        auto* buttons = new QHBoxLayout();
+        buttons->addStretch();
+        auto* cancel = new QPushButton(tr("Cancel"));
+        auto* unlock = new QPushButton(tr("Unlock"));
+        unlock->setObjectName("primary");
+        unlock->setDefault(true);
+        connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+        connect(unlock, &QPushButton::clicked, this, &QDialog::accept);
+        connect(m_password, &QLineEdit::returnPressed, this, &QDialog::accept);
+        buttons->addWidget(cancel);
+        buttons->addWidget(unlock);
+
+        layout->addWidget(title);
+        layout->addWidget(sub);
+        layout->addSpacing(6);
+        layout->addWidget(m_password);
+        layout->addWidget(show);
+        layout->addSpacing(6);
+        layout->addLayout(buttons);
+        m_password->setFocus();
+    }
+
+    QString password() const
+    {
+        return m_password->text();
+    }
+
+private:
+    QLineEdit* m_password = nullptr;
+};
+
 class EntryDialog : public QDialog
 {
 public:
@@ -130,9 +203,12 @@ public:
         setMinimumWidth(460);
 
         auto* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(24, 24, 24, 20);
+        layout->setSpacing(14);
         auto* form = new QFormLayout();
         form->setLabelAlignment(Qt::AlignLeft);
-        form->setSpacing(8);
+        form->setHorizontalSpacing(16);
+        form->setVerticalSpacing(10);
 
         m_title = addField(form, tr("Title"), entry ? entry->title() : QString());
         m_username = addField(form, tr("Username"), entry ? entry->username() : QString());
@@ -166,17 +242,18 @@ public:
         buttons->addWidget(save);
         layout->addLayout(buttons);
 
-        m_username->setVisible(type != QStringLiteral("Card"));
-        m_url->setVisible(type == QStringLiteral("Password"));
-        m_password->setVisible(type == QStringLiteral("Password"));
-        m_secret->setVisible(type == QStringLiteral("TOTP"));
-        m_holder->setVisible(type == QStringLiteral("Card"));
-        m_number->setVisible(type == QStringLiteral("Card"));
-        m_expiry->setVisible(type == QStringLiteral("Card"));
-        m_cvv->setVisible(type == QStringLiteral("Card"));
-        m_rpId->setVisible(type == QStringLiteral("Passkey"));
-        m_credentialId->setVisible(type == QStringLiteral("Passkey"));
-        m_privateKey->setVisible(type == QStringLiteral("Passkey"));
+        // setRowVisible hides the label together with the field (setVisible left orphan labels behind).
+        form->setRowVisible(m_username, type != QStringLiteral("Card"));
+        form->setRowVisible(m_url, type == QStringLiteral("Password"));
+        form->setRowVisible(m_password, type == QStringLiteral("Password"));
+        form->setRowVisible(m_secret, type == QStringLiteral("TOTP"));
+        form->setRowVisible(m_holder, type == QStringLiteral("Card"));
+        form->setRowVisible(m_number, type == QStringLiteral("Card"));
+        form->setRowVisible(m_expiry, type == QStringLiteral("Card"));
+        form->setRowVisible(m_cvv, type == QStringLiteral("Card"));
+        form->setRowVisible(m_rpId, type == QStringLiteral("Passkey"));
+        form->setRowVisible(m_credentialId, type == QStringLiteral("Passkey"));
+        form->setRowVisible(m_privateKey, type == QStringLiteral("Passkey"));
     }
 
     void apply(Entry* entry) const
@@ -259,7 +336,16 @@ PersonalVaultWindow::PersonalVaultWindow(QWidget* parent)
     connect(m_totpTimer, &QTimer::timeout, this, [this] { updateTotp(); });
     m_totpTimer->start();
     setWindowTitle(tr("Personal Vault"));
+    setMinimumSize(900, 600);
     resize(1200, 760);
+
+    auto bind = [this](const QKeySequence& keys, std::function<void()> fn) {
+        auto* shortcut = new QShortcut(keys, this);
+        connect(shortcut, &QShortcut::activated, this, std::move(fn));
+    };
+    bind(QKeySequence::Find, [this] { m_search->setFocus(); m_search->selectAll(); });
+    bind(QKeySequence::New, [this] { addItem(); });
+    bind(QKeySequence(Qt::CTRL | Qt::Key_L), [this] { lockVault(); });
 }
 
 void PersonalVaultWindow::buildUi()
@@ -272,7 +358,7 @@ void PersonalVaultWindow::buildUi()
     // Sidebar
     auto* sidebar = new QWidget();
     sidebar->setFixedWidth(250);
-    sidebar->setStyleSheet(QStringLiteral("background:#091012;border-right:1px solid #16282B;"));
+    sidebar->setObjectName("sidebar");
     auto* sideLayout = new QVBoxLayout(sidebar);
     sideLayout->setContentsMargins(12, 14, 12, 12);
     sideLayout->setSpacing(8);
@@ -291,16 +377,12 @@ void PersonalVaultWindow::buildUi()
     m_vaultName->setObjectName("vaultName");
     m_status = new QLabel(tr("● Locked"));
     m_status->setObjectName("vaultStatus");
+    m_status->setProperty("locked", true);
     vaultText->addWidget(m_vaultName);
     vaultText->addWidget(m_status);
     vaultHeaderLayout->addWidget(vaultAvatar);
     vaultHeaderLayout->addLayout(vaultText, 1);
     sideLayout->addWidget(vaultHeader);
-
-    m_autoLock = new QLabel(tr("Auto-lock off"));
-    m_autoLock->setObjectName("autoLock");
-    m_autoLock->setAlignment(Qt::AlignCenter);
-    sideLayout->addWidget(m_autoLock);
 
     auto* navGroup = new QButtonGroup(this);
     navGroup->setExclusive(true);
@@ -390,18 +472,31 @@ void PersonalVaultWindow::buildUi()
     connect(add, &QPushButton::clicked, this, &PersonalVaultWindow::addItem);
     auto* lockTop = new QPushButton(tr("Lock"));
     connect(lockTop, &QPushButton::clicked, this, [this] {
-        browserService()->setExternalDatabase({});
-        m_db.clear();
-        m_current = nullptr;
-        if (m_list) { m_list->clear(); }
-        clearDetails();
-        refresh();
+        lockVault();
         promptOpen();
     });
+    auto windowButton = [this](const QString& glyph, const char* name, const QString& tip) {
+        auto* b = new QPushButton(glyph);
+        b->setObjectName(QString::fromLatin1(name));
+        b->setFixedSize(34, 28);
+        b->setToolTip(tip);
+        b->setFocusPolicy(Qt::NoFocus);
+        return b;
+    };
+    auto* minimize = windowButton(QStringLiteral("—"), "winButton", tr("Minimize"));
+    auto* maximize = windowButton(QStringLiteral("▢"), "winButton", tr("Maximize"));
+    auto* closeButton = windowButton(QStringLiteral("✕"), "winClose", tr("Close"));
+    connect(minimize, &QPushButton::clicked, this, &QWidget::showMinimized);
+    connect(maximize, &QPushButton::clicked, this, [this] { isMaximized() ? showNormal() : showMaximized(); });
+    connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     topLayout->addWidget(m_search);
     topLayout->addStretch();
     topLayout->addWidget(add);
     topLayout->addWidget(lockTop);
+    topLayout->addSpacing(8);
+    topLayout->addWidget(minimize);
+    topLayout->addWidget(maximize);
+    topLayout->addWidget(closeButton);
     mainLayout->addWidget(topbar);
 
     auto* splitter = new QSplitter(Qt::Horizontal);
@@ -491,14 +586,7 @@ void PersonalVaultWindow::showSettingsMenu()
     } else if (chosen == import) {
         importBitwarden();
     } else if (chosen == lock) {
-        browserService()->setExternalDatabase({});
-        m_db.clear();
-        m_current = nullptr;
-        if (m_list) {
-            m_list->clear();
-        }
-        clearDetails();
-        refresh();
+        lockVault();
     }
 }
 
@@ -522,36 +610,29 @@ void PersonalVaultWindow::promptOpen()
     }
 }
 
-bool PersonalVaultWindow::openVault(const QString& path)
+void PersonalVaultWindow::lockVault()
 {
-    bool ok = false;
-    const auto password = QInputDialog::getText(this,
-                                                tr("Unlock"),
-                                                tr("Master password for %1").arg(QFileInfo(path).fileName()),
-                                                QLineEdit::Password,
-                                                QString(),
-                                                &ok);
-    if (!ok) {
-        return false;
+    browserService()->setExternalDatabase({});
+    m_db.clear();
+    m_current = nullptr;
+    if (m_list) {
+        m_list->clear();
     }
+    clearDetails();
+    refresh();
+}
 
-    auto key = QSharedPointer<CompositeKey>::create();
-    key->addKey(QSharedPointer<PasswordKey>::create(password));
-    auto db = QSharedPointer<Database>::create(path);
-    QString error;
-    if (!db->open(key, &error)) {
-        QMessageBox::warning(this, tr("Could not open database"), error);
-        return false;
-    }
-
+void PersonalVaultWindow::attachDatabase(const QSharedPointer<Database>& db, const QString& path)
+{
     m_current = nullptr;
     m_tag.clear();
-    if (m_list) { m_list->clear(); }
+    if (m_list) {
+        m_list->clear();
+    }
     clearDetails();
     m_db = db;
     m_vaultName->setText(tr("Personal Vault"));
     m_vaultName->setToolTip(path);
-    m_status->setText(tr("● Unlocked"));
     addRecent(path);
     browserSettings()->setSearchInAllDatabases(false);
     browserService()->setExternalDatabase(m_db);
@@ -559,6 +640,24 @@ bool PersonalVaultWindow::openVault(const QString& path)
     browserService()->setEnabled(true);
     connect(m_db.data(), &Database::modified, this, &PersonalVaultWindow::saveDatabase, Qt::QueuedConnection);
     refresh();
+}
+
+bool PersonalVaultWindow::openVault(const QString& path)
+{
+    UnlockDialog dialog(QFileInfo(path).fileName(), this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+
+    auto key = QSharedPointer<CompositeKey>::create();
+    key->addKey(QSharedPointer<PasswordKey>::create(dialog.password()));
+    auto db = QSharedPointer<Database>::create(path);
+    QString error;
+    if (!db->open(key, &error)) {
+        QMessageBox::warning(this, tr("Could not open database"), error);
+        return false;
+    }
+    attachDatabase(db, path);
     return true;
 }
 
@@ -571,22 +670,7 @@ bool PersonalVaultWindow::openVaultWithPassword(const QString& path, const QStri
     if (!db->open(key, &error)) {
         return false;
     }
-
-    m_current = nullptr;
-    m_tag.clear();
-    if (m_list) { m_list->clear(); }
-    clearDetails();
-    m_db = db;
-    m_vaultName->setText(tr("Personal Vault"));
-    m_vaultName->setToolTip(path);
-    m_status->setText(QStringLiteral("● Unlocked"));
-    addRecent(path);
-    browserSettings()->setSearchInAllDatabases(false);
-    browserService()->setExternalDatabase(m_db);
-    browserSettings()->setEnabled(true);
-    browserService()->setEnabled(true);
-    connect(m_db.data(), &Database::modified, this, &PersonalVaultWindow::saveDatabase, Qt::QueuedConnection);
-    refresh();
+    attachDatabase(db, path);
     return true;
 }
 
@@ -652,8 +736,11 @@ void PersonalVaultWindow::refresh()
     refreshCounts();
     refreshList();
     refreshCounts();
+    m_status->setText(m_db ? tr("● Unlocked") : tr("● Locked"));
+    m_status->setProperty("locked", !m_db);
+    m_status->style()->unpolish(m_status);
+    m_status->style()->polish(m_status);
     if (!m_db) {
-        m_status->setText(tr("● Locked"));
         clearDetails();
     }
 }
@@ -671,6 +758,7 @@ void PersonalVaultWindow::refreshCounts()
             else if (type == QStringLiteral("totp")) totp++;
             else if (type == QStringLiteral("card")) card++;
             if (isWeak(entry)) weak++;
+            if (entry->tagList().contains(QStringLiteral("Favorite"), Qt::CaseInsensitive)) favorite++;
             for (const auto& tag : entry->tagList()) {
                 if (!tags.contains(tag)) {
                     tags << tag;
@@ -696,7 +784,7 @@ void PersonalVaultWindow::refreshCounts()
         tags.sort();
         if (tags.isEmpty()) {
             auto* none = new QLabel(tr("No tags"));
-            none->setStyleSheet(QStringLiteral("color:#8FA8A6;"));
+            none->setObjectName("mutedLabel");
             m_tagsLayout->addWidget(none);
         }
         for (const auto& tag : tags) {
@@ -771,22 +859,20 @@ void PersonalVaultWindow::refreshList()
         auto* titleLabel = new QLabel(entry->tagList().contains(QStringLiteral("Favorite"), Qt::CaseInsensitive)
                                           ? QStringLiteral("★ ") + title
                                           : title);
-        QFont bold = titleLabel->font();
-        bold.setBold(true);
-        titleLabel->setFont(bold);
-        auto* subLabel = new QLabel(typeOf(entry));
-        subLabel->setStyleSheet(QStringLiteral("color:#8FA8A6;font-size:11px;"));
+        titleLabel->setObjectName("rowTitle");
+        auto* subLabel = new QLabel(prettyType(typeOf(entry)));
+        subLabel->setObjectName("rowSub");
         textLayout->addWidget(titleLabel);
         textLayout->addWidget(subLabel);
         rowLayout->addLayout(textLayout, 1);
 
         auto* user = new QLabel(primaryUser(entry));
-        user->setStyleSheet(QStringLiteral("color:#B7CCC9;"));
+        user->setObjectName("rowUser");
         user->setMinimumWidth(120);
         rowLayout->addWidget(user);
 
         auto* date = new QLabel(updatedText(entry));
-        date->setStyleSheet(QStringLiteral("color:#8FA8A6;font-size:11px;"));
+        date->setObjectName("rowDate");
         rowLayout->addWidget(date);
 
         m_list->setItemWidget(item, row);
@@ -810,11 +896,17 @@ void PersonalVaultWindow::clearDetails()
         return;
     }
     clearLayout(m_detailsLayout);
-    auto* empty = new QLabel(tr("Select an item"));
-    empty->setStyleSheet(QStringLiteral("color:#8FA8A6;"));
+    auto* empty = new QLabel(m_db ? tr("Select an item") : tr("Vault is locked"));
+    empty->setObjectName("mutedLabel");
     empty->setAlignment(Qt::AlignCenter);
     m_detailsLayout->addStretch();
     m_detailsLayout->addWidget(empty);
+    if (!m_db) {
+        auto* open = new QPushButton(tr("Open vault"));
+        open->setObjectName("primary");
+        connect(open, &QPushButton::clicked, this, [this] { openLastVault(); });
+        m_detailsLayout->addWidget(open);
+    }
     m_detailsLayout->addStretch();
 }
 
@@ -849,6 +941,7 @@ void PersonalVaultWindow::showDetails(Entry* entry)
     auto* favorite = new QPushButton(entry->tagList().contains(QStringLiteral("Favorite"), Qt::CaseInsensitive)
                                          ? QStringLiteral("★")
                                          : QStringLiteral("☆"));
+    favorite->setObjectName("ghost");
     favorite->setFixedWidth(34);
     connect(favorite, &QPushButton::clicked, this, [this, entry] { toggleFavorite(entry); });
     headLayout->addWidget(favorite);
@@ -856,10 +949,10 @@ void PersonalVaultWindow::showDetails(Entry* entry)
 
     const auto type = typeOf(entry);
     auto* typeLabel = new QLabel(type.toUpper());
-    typeLabel->setStyleSheet(QStringLiteral("color:#B7CCC9;font-size:11px;"));
+    typeLabel->setObjectName("typeBadge");
     m_detailsLayout->addWidget(typeLabel);
 
-    auto addField = [this](const QString& label, const QString& value, bool copy) {
+    auto addField = [this](const QString& label, const QString& value, bool copy, const QString& copyValue = QString()) {
         auto* box = new QWidget();
         auto* layout = new QVBoxLayout(box);
         layout->setContentsMargins(0, 0, 0, 0);
@@ -875,7 +968,8 @@ void PersonalVaultWindow::showDetails(Entry* entry)
         if (copy) {
             auto* button = new QPushButton(tr("Copy"));
             button->setFixedWidth(56);
-            connect(button, &QPushButton::clicked, this, [this, value, label] { copyText(value, label); });
+            const auto toCopy = copyValue.isNull() ? value : copyValue;
+            connect(button, &QPushButton::clicked, this, [this, toCopy, label] { copyText(toCopy, label); });
             row->addWidget(button);
         }
         layout->addWidget(caption);
@@ -885,15 +979,14 @@ void PersonalVaultWindow::showDetails(Entry* entry)
 
     if (type == QStringLiteral("password")) {
         addField(tr("Username"), entry->username(), true);
-        addField(tr("Password"), QStringLiteral("••••••••••••"), true);
+        addField(tr("Password"), QStringLiteral("••••••••••••"), true, entry->password());
         auto* strength = new QLabel(isWeak(entry) ? tr("WEAK") : tr("STRONG"));
-        strength->setStyleSheet(isWeak(entry) ? QStringLiteral("color:#FF8F8F;font-weight:700;")
-                                              : QStringLiteral("color:#2FBF8A;font-weight:700;"));
+        strength->setObjectName(isWeak(entry) ? "strengthWeak" : "strengthStrong");
         m_detailsLayout->addWidget(strength);
     } else if (type == QStringLiteral("totp")) {
         addField(tr("Username"), entry->username(), true);
         m_totpLabel = new QLabel(entry->totp());
-        m_totpLabel->setStyleSheet(QStringLiteral("font-size:26px;font-weight:700;letter-spacing:2px;"));
+        m_totpLabel->setObjectName("totpCode");
         auto* box = new QWidget();
         auto* layout = new QVBoxLayout(box);
         layout->setContentsMargins(0, 0, 0, 0);
@@ -907,7 +1000,8 @@ void PersonalVaultWindow::showDetails(Entry* entry)
         const auto number = entry->attributes()->value(CARD_NUMBER);
         addField(tr("Card number"),
                  number.isEmpty() ? QString() : QStringLiteral("•••• •••• •••• %1").arg(number.right(4)),
-                 true);
+                 true,
+                 number);
         addField(tr("Expiry"), entry->attributes()->value(CARD_EXPIRY), false);
         addField(tr("CVV"), QStringLiteral("•••"), false);
     } else if (type == QStringLiteral("passkey")) {
@@ -941,6 +1035,7 @@ void PersonalVaultWindow::showDetails(Entry* entry)
     auto* actions = new QHBoxLayout();
     auto* edit = new QPushButton(tr("Edit"));
     auto* del = new QPushButton(tr("Delete"));
+    del->setObjectName("danger");
     connect(edit, &QPushButton::clicked, this, [this, entry] { editItem(entry); });
     connect(del, &QPushButton::clicked, this, [this, entry] { deleteItem(entry); });
     actions->addWidget(edit);
