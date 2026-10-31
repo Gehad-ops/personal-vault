@@ -31,7 +31,9 @@ class Icon {
         const styleSheet = createStylesheet(styleSheetFilename);
         const wrapper = document.createElement('div');
         wrapper.style.all = 'unset';
-        wrapper.style.display = 'none';
+        // Show immediately: some pages never deliver the stylesheet load event
+        // inside a closed shadow root, leaving the icon permanently hidden.
+        wrapper.style.display = 'block';
 
         // Make sure the wrapper is positioned correctly without CSS styles affecting to it
         wrapper.style.position = 'absolute';

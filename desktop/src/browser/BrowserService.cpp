@@ -704,8 +704,12 @@ QJsonObject BrowserService::showPasskeysRegisterPrompt(const QJsonObject& public
     const auto existingEntries = getPasskeyEntriesWithUserHandle(rpId, userId, keyList);
 
     raiseWindow();
-    BrowserPasskeysConfirmationDialog confirmDialog(m_currentDatabaseWidget);
+    auto* passkeyParent = m_currentDatabaseWidget ? static_cast<QWidget*>(m_currentDatabaseWidget.data())
+                                                   : static_cast<QWidget*>(m_externalWindow.data());
+    BrowserPasskeysConfirmationDialog confirmDialog(passkeyParent);
     confirmDialog.registerCredential(username, rpId, existingEntries, timeout);
+    confirmDialog.raise();
+    confirmDialog.activateWindow();
 
     auto dialogResult = confirmDialog.exec();
     if (dialogResult == QDialog::Accepted) {
@@ -722,7 +726,7 @@ QJsonObject BrowserService::showPasskeysRegisterPrompt(const QJsonObject& public
             // If no entry is selected, show the import dialog for manual entry selection
             auto selectedEntry = confirmDialog.getSelectedEntry();
             if (!selectedEntry) {
-                PasskeyImporter passkeyImporter(m_currentDatabaseWidget);
+                PasskeyImporter passkeyImporter(passkeyParent);
                 const auto result = passkeyImporter.showImportDialog(db,
                                                                      nullptr,
                                                                      origin,
@@ -799,8 +803,12 @@ QJsonObject BrowserService::showPasskeysAuthenticationPrompt(const QJsonObject& 
     const auto timeout = publicKeyOptions["timeout"].toInt();
 
     raiseWindow();
-    BrowserPasskeysConfirmationDialog confirmDialog(m_currentDatabaseWidget);
+    auto* passkeyParent = m_currentDatabaseWidget ? static_cast<QWidget*>(m_currentDatabaseWidget.data())
+                                                   : static_cast<QWidget*>(m_externalWindow.data());
+    BrowserPasskeysConfirmationDialog confirmDialog(passkeyParent);
     confirmDialog.authenticateCredential(entries, rpId, timeout);
+    confirmDialog.raise();
+    confirmDialog.activateWindow();
     auto dialogResult = confirmDialog.exec();
     if (dialogResult == QDialog::Accepted) {
         hideWindow();
