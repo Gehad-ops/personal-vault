@@ -26,6 +26,7 @@
 #include <QShortcut>
 #include <QSizeGrip>
 #include <QMouseEvent>
+#include <QIcon>
 #include <QPainter>
 #include <QEnterEvent>
 #include <QPaintEvent>
@@ -298,14 +299,15 @@ QPixmap makeLogoPixmap(int size)
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
     p.setBrush(QColor("#123A33"));
-    p.drawRoundedRect(QRectF(0, 0, size, size), 10, 10);
-    QPen pen(QColor("#2FBF8A"), 2.0);
+    p.drawRoundedRect(QRectF(0.5, 0.5, size - 1, size - 1), size * 0.28, size * 0.28);
+    QPen pen(QColor("#2FBF8A"), qMax(1.6, size / 18.0));
     pen.setCapStyle(Qt::RoundCap);
     p.setPen(pen);
-    const int cx = size / 2;
-    for (int i = -1; i <= 1; ++i) {
-        p.drawLine(cx - 6, size / 2 + i * 5, cx + 6, size / 2 + i * 5);
-    }
+    const qreal cx = size / 2.0;
+    const qreal cy = size / 2.0;
+    const qreal r = size * 0.13;
+    p.drawEllipse(QPointF(cx, cy - size * 0.05), r, r);
+    p.drawLine(QPointF(cx, cy + r * 0.4), QPointF(cx, cy + size * 0.18));
     return pm;
 }
 
@@ -453,6 +455,7 @@ PersonalVaultWindow::PersonalVaultWindow(QWidget* parent)
     connect(m_totpTimer, &QTimer::timeout, this, [this] { updateTotp(); });
     m_totpTimer->start();
     setWindowTitle(tr("Personal Vault"));
+    setWindowIcon(QIcon(makeLogoPixmap(64)));
     setMinimumSize(900, 600);
     resize(1200, 760);
 
