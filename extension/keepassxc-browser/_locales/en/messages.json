@@ -282,6 +282,10 @@
     "passwordGeneratorNotSupported": {
         "message": "Launching the password generator is not supported in this KeePassXC version. Please update KeePassXC to a newer version."
     },
+    "passwordGeneratorNoField": {
+        "message": "No password field found on this page.",
+        "description": "Notification when the password generator is opened without a password field."
+    },
     "usernameFieldText": {
         "message": "Fill credentials from KeePassXC.",
         "description": "Username field icon hover text."

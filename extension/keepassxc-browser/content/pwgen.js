@@ -101,7 +101,21 @@ PasswordIcon.prototype.createIcon = function(field) {
 const kpxcPasswordGenerator = {};
 
 kpxcPasswordGenerator.showPasswordGenerator = async function(field) {
-    kpxcPasswordGenerator.generate(field ?? document.activeElement);
+    const target = kpxcPasswordGenerator.findTarget(field);
+    if (!target) {
+        kpxcUI.createNotification('error', tr('passwordGeneratorNoField') || 'No password field found on this page');
+        return;
+    }
+
+    await kpxcPasswordGenerator.generate(target);
+};
+
+kpxcPasswordGenerator.findTarget = function(field) {
+    if (field && field.tagName === 'INPUT' && field.type === 'password' && !field.disabled) {
+        return field;
+    }
+
+    return document.querySelector('input[type="password"]:not([disabled])');
 };
 
 kpxcPasswordGenerator.generate = async function(field) {

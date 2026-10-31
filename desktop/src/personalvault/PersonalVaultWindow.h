@@ -12,6 +12,7 @@ class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QProgressBar;
 class QPushButton;
 class QResizeEvent;
 class QSizeGrip;
@@ -48,6 +49,8 @@ private:
     void copyText(const QString& text, const QString& label);
     void saveDatabase();
     void showSettingsMenu();
+    void lockVault();
+    void attachDatabase(const QSharedPointer<Database>& db, const QString& path);
     void addRecent(const QString& path);
     QStringList recentFiles() const;
 
@@ -67,9 +70,11 @@ private:
     QLabel* m_vaultName = nullptr;
     QLabel* m_status = nullptr;
     QLabel* m_health = nullptr;
-    QLabel* m_healthRing = nullptr;
-    QLabel* m_autoLock = nullptr;
-    QHBoxLayout* m_tagsLayout = nullptr;
+    QProgressBar* m_healthBar = nullptr;
+    QProgressBar* m_totpBar = nullptr;
+    QLabel* m_listTitle = nullptr;
+    QLabel* m_listCount = nullptr;
+    QVBoxLayout* m_tagsLayout = nullptr;
     QHash<QString, QPushButton*> m_navButtons;
     QPushButton* m_allButton = nullptr;
     QSizeGrip* m_sizeGrip = nullptr;
@@ -77,6 +82,13 @@ private:
     Entry* m_current = nullptr;
     QString m_filter = QStringLiteral("all");
     QString m_tag;
+    QString m_vaultPath;
+    bool m_passwordVisible = false;
+    QWidget* m_main = nullptr;
+    QWidget* m_lockPanel = nullptr;
+    QLineEdit* m_lockPassword = nullptr;
+    QLabel* m_lockFile = nullptr;
+    QLabel* m_lockError = nullptr;
 };
 
 #endif
