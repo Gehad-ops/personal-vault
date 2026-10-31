@@ -40,6 +40,7 @@
 #include "gui/osutils/macutils/MacUtils.h"
 #endif
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QCryptographicHash>
 #include <QHostAddress>
@@ -116,6 +117,11 @@ void BrowserService::setEnabled(bool enabled)
 void BrowserService::setExternalDatabase(const QSharedPointer<Database>& db)
 {
     m_externalDatabase = db;
+}
+
+void BrowserService::setExternalWindow(QWidget* window)
+{
+    m_externalWindow = window;
 }
 
 bool BrowserService::hasExternalDatabase() const
@@ -311,7 +317,8 @@ QJsonObject BrowserService::createNewGroup(const QString& groupName,
         return result;
     }
 
-    auto dialogResult = MessageBox::warning(m_currentDatabaseWidget,
+    auto dialogResult = MessageBox::warning(m_currentDatabaseWidget ? static_cast<QWidget*>(m_currentDatabaseWidget.data())
+                                                         : static_cast<QWidget*>(m_externalWindow.data()),
                                             tr("KeePassXC - Create a new group"),
                                             tr("A request for creating a new group \"%1\" has been received.\n"
                                                "Do you want to create this group?\n")
@@ -551,13 +558,13 @@ QList<Entry*> BrowserService::confirmEntries(QList<Entry*>& entriesToConfirm,
 void BrowserService::showPasswordGenerator(const KeyPairMessage& keyPairMessage)
 {
     if (!m_passwordGenerator) {
-        m_passwordGenerator = PasswordGeneratorWidget::popupGenerator();
+        m_passwordGenerator = PasswordGeneratorWidget::popupGenerator(m_externalWindow ? m_externalWindow.data() : nullptr);
 
         connect(m_passwordGenerator.data(),
                 &PasswordGeneratorWidget::closed,
                 m_passwordGenerator.data(),
                 [this, keyPairMessage] {
-                    if (!m_passwordGenerator->isPasswordGenerated()) {
+                    if (!m_passwordGenerator->isPasswordGenerated() && keyPairMessage.socket && m_browserHost) {
                         auto errorMessage = browserMessageBuilder()->getErrorReply(
                             "generate-password", ERROR_KEEPASS_ACTION_CANCELLED_OR_DENIED);
                         m_browserHost->sendClientMessage(keyPairMessage.socket, errorMessage);
@@ -570,6 +577,9 @@ void BrowserService::showPasswordGenerator(const KeyPairMessage& keyPairMessage)
                 &PasswordGeneratorWidget::appliedPassword,
                 m_passwordGenerator.data(),
                 [this, keyPairMessage](const QString& password) {
+                    if (!keyPairMessage.socket || !m_browserHost) {
+                        return;
+                    }
                     const Parameters params{{"password", password}};
                     m_browserHost->sendClientMessage(keyPairMessage.socket,
                                                      browserMessageBuilder()->buildResponse("generate-password",
@@ -580,7 +590,10 @@ void BrowserService::showPasswordGenerator(const KeyPairMessage& keyPairMessage)
                 });
     }
 
-    raiseWindow();
+    raiseWindow(true);
+    if (m_externalWindow) {
+        m_passwordGenerator->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    }
     m_passwordGenerator->show();
     m_passwordGenerator->raise();
     m_passwordGenerator->activateWindow();
@@ -602,9 +615,13 @@ QString BrowserService::storeKey(const QString& key)
     auto dialogResult = MessageBox::Cancel;
     QString id;
 
+    auto* dialogParent = m_currentDatabaseWidget ? static_cast<QWidget*>(m_currentDatabaseWidget.data())
+                                                  : static_cast<QWidget*>(m_externalWindow.data());
     do {
-        QInputDialog keyDialog(m_currentDatabaseWidget);
-        connect(m_currentDatabaseWidget, SIGNAL(databaseLockRequested()), &keyDialog, SLOT(reject()));
+        QInputDialog keyDialog(dialogParent);
+        if (m_currentDatabaseWidget) {
+            connect(m_currentDatabaseWidget, SIGNAL(databaseLockRequested()), &keyDialog, SLOT(reject()));
+        }
         keyDialog.setWindowTitle(tr("KeePassXC - New key association request"));
         keyDialog.setLabelText(tr("You have received an association request for the following database:\n%1\n\n"
                                   "Give the connection a unique name or ID, for example:\nchrome-laptop.")
@@ -627,7 +644,7 @@ QString BrowserService::storeKey(const QString& key)
         contains =
             db->metadata()->customData()->contains(CustomData::getKeyWithPrefix(CustomData::BrowserKeyPrefix, id));
         if (contains) {
-            dialogResult = MessageBox::warning(m_currentDatabaseWidget,
+            dialogResult = MessageBox::warning(dialogParent,
                                                tr("KeePassXC - Overwrite existing key?"),
                                                tr("A shared encryption key with the name \"%1\" "
                                                   "already exists.\nDo you want to overwrite it?")
@@ -936,6 +953,10 @@ void BrowserService::addEntry(const EntryParameters& entryParameters,
     if (downloadFavicon && m_currentDatabaseWidget) {
         m_currentDatabaseWidget->downloadFaviconInBackground(entry);
     }
+    db->markAsModified();
+    if (m_externalWindow) {
+        QApplication::alert(m_externalWindow, 1500);
+    }
 }
 
 bool BrowserService::updateEntry(const EntryParameters& entryParameters, const QString& uuid)
@@ -975,7 +996,8 @@ bool BrowserService::updateEntry(const EntryParameters& entryParameters, const Q
         MessageBox::Button dialogResult = MessageBox::No;
         if (!browserSettings()->alwaysAllowUpdate()) {
             raiseWindow();
-            dialogResult = MessageBox::question(m_currentDatabaseWidget,
+            dialogResult = MessageBox::question(m_currentDatabaseWidget ? static_cast<QWidget*>(m_currentDatabaseWidget.data())
+                                                        : static_cast<QWidget*>(m_externalWindow.data()),
                                                 tr("KeePassXC - Update Entry"),
                                                 tr("Do you want to update the information in %1 - %2?")
                                                     .arg(QUrl(entryParameters.siteUrl).host(), username),
@@ -996,6 +1018,9 @@ bool BrowserService::updateEntry(const EntryParameters& entryParameters, const Q
         hideWindow();
     }
 
+    if (result) {
+        db->markAsModified();
+    }
     return result;
 }
 
@@ -1737,6 +1762,10 @@ QSharedPointer<Database> BrowserService::selectedDatabase()
 
 void BrowserService::hideWindow() const
 {
+    if (m_externalWindow) {
+        m_externalWindow->lower();
+        return;
+    }
     if (!getMainWindow()) {
         return;
     }
@@ -1765,6 +1794,16 @@ void BrowserService::hideWindow() const
 
 void BrowserService::raiseWindow(const bool force)
 {
+    if (m_externalWindow) {
+        if (m_externalWindow->isMinimized()) {
+            m_externalWindow->showNormal();
+        }
+        m_externalWindow->show();
+        m_externalWindow->raise();
+        m_externalWindow->activateWindow();
+        QApplication::alert(m_externalWindow, 2500);
+        return;
+    }
     if (!getMainWindow()) {
         return;
     }

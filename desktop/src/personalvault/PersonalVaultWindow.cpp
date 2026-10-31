@@ -781,6 +781,7 @@ PersonalVaultWindow::PersonalVaultWindow(QWidget* parent)
     m_totpTimer->start();
     setWindowTitle(tr("Personal Vault"));
     setWindowIcon(QIcon(makeLogoPixmap(64)));
+    browserService()->setExternalWindow(this);
     setMinimumSize(900, 600);
     resize(1120, 680);
 
@@ -1226,10 +1227,12 @@ void PersonalVaultWindow::attachDatabase(const QSharedPointer<Database>& db, con
     }
     addRecent(path);
     browserSettings()->setSearchInAllDatabases(false);
+    browserService()->setExternalWindow(this);
     browserService()->setExternalDatabase(m_db);
     browserSettings()->setEnabled(true);
     browserService()->setEnabled(true);
     connect(m_db.data(), &Database::modified, this, &PersonalVaultWindow::saveDatabase, Qt::QueuedConnection);
+    connect(m_db.data(), &Database::modified, this, &PersonalVaultWindow::refresh, Qt::QueuedConnection);
     refresh();
 }
 

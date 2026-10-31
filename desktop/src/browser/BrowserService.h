@@ -26,6 +26,7 @@
 #include "gui/PasswordGeneratorWidget.h"
 
 class QLocalSocket;
+class QWidget;
 
 typedef QPair<QString, QString> StringPair;
 typedef QList<StringPair> StringPairList;
@@ -70,6 +71,7 @@ public:
 
     void setEnabled(bool enabled);
     void setExternalDatabase(const QSharedPointer<Database>& db);
+    void setExternalWindow(QWidget* window);
     bool hasExternalDatabase() const;
 
     QString getKey(const QString& id);
@@ -225,6 +227,7 @@ private:
     QUuid m_keepassBrowserUUID;
 
     QSharedPointer<Database> m_externalDatabase;
+    QPointer<QWidget> m_externalWindow;
     QPointer<DatabaseWidget> m_currentDatabaseWidget;
     QPointer<PasswordGeneratorWidget> m_passwordGenerator;
 
