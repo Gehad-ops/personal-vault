@@ -83,6 +83,11 @@ secure context, so the passkey section works there.
     extension does not intercept the request, the browser's own WebAuthn prompt
     is still a valid result for the page.
 
+The signup form posts to /signup and the test server returns HTTP 204, so the
+extension sees a successful signup and offers its save prompt. The browser may
+also show its own password-save bubble; dismiss that if you are testing the
+KeePassXC banner.
+
 ## Troubleshooting
 
 - **Extension says Personal Vault is not running**: start the app and unlock the

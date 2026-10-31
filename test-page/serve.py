@@ -9,6 +9,13 @@ PORT = 8765
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == "/signup":
+            self.send_response(204)
+            self.end_headers()
+            return
+        super().do_POST()
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()

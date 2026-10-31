@@ -240,8 +240,16 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       log(name + ' submitted: ' + summary(), 'ok');
-      if (formId === 'signup-form' && val('signup-password') !== val('signup-confirm')) {
-        log('Signup passwords do not match.', 'warn');
+      if (formId === 'signup-form') {
+        if (val('signup-password') !== val('signup-confirm')) {
+          log('Signup passwords do not match.', 'warn');
+          return;
+        }
+        fetch('/signup', { method: 'POST' }).then(response => {
+          log('Signup success response: HTTP ' + response.status, 'ok');
+        }).catch(error => {
+          log('Signup request failed: ' + error, 'error');
+        });
       }
       if (formId === 'change-form' && val('change-new') !== val('change-confirm')) {
         log('New passwords do not match.', 'warn');
