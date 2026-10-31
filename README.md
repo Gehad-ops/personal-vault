@@ -32,7 +32,10 @@ cmake -S . -B build-mingw -G Ninja -DCMAKE_BUILD_TYPE=Release `
   -DBOTAN_INCLUDE_DIR="C:/deps/include/botan-3" `
   -DBOTAN_LIBRARY="C:/deps/lib/libbotan-3.a" `
   -DZLIB_INCLUDE_DIR="C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include" `
-  -DZLIB_LIBRARY="C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/lib/libz.a"
+  -DZLIB_LIBRARY="C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/lib/libz.a" `
+  -DKPXC_FEATURE_NETWORK=OFF `
+  -DKPXC_FEATURE_UPDATES=OFF `
+  -DKPXC_FEATURE_SSHAGENT=OFF
 cmake --build build-mingw --target PersonalVault -j 6
 ```
 
