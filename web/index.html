@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personal Vault</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-card">
+    <div class="lock-brand"><span class="brand-mark">▤</span><span>Personal Vault</span></div>
+    <h1 id="lockTitle">Unlock your vault</h1>
+    <p id="lockSub" class="muted">Your vault is encrypted on this device.</p>
+    <label class="field-label" for="masterPassword">Master password</label>
+    <input id="masterPassword" type="password" autocomplete="current-password" placeholder="Enter master password">
+    <div id="confirmWrap" class="hidden">
+      <label class="field-label" for="confirmPassword">Confirm master password</label>
+      <input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Confirm master password">
+    </div>
+    <div id="lockError" class="error"></div>
+    <button id="unlockBtn" class="btn primary wide">Unlock</button>
+    <button id="resetVaultBtn" class="btn ghost wide">Erase vault and start over</button>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="vault-header">
+      <span class="vault-avatar">▤</span>
+      <div class="vault-meta">
+        <div id="vaultName" class="vault-name">Personal Vault</div>
+        <div id="vaultStatus" class="vault-status">● Unlocked</div>
+      </div>
+    </div>
+    <div class="auto-lock">Auto-lock in <span id="autoLockLabel">05:00</span></div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-filter="all"><span>All items</span><em id="countAll">0</em></button>
+      <button class="nav-item" data-filter="favorite"><span>Favorites</span><em id="countFavorite">0</em></button>
+      <div class="section-label">CATEGORIES</div>
+      <button class="nav-item" data-filter="password"><span>Passwords</span><em id="countPassword">0</em></button>
+      <button class="nav-item" data-filter="passkey"><span>Passkeys</span><em id="countPasskey">0</em></button>
+      <button class="nav-item" data-filter="totp"><span>TOTP</span><em id="countTotp">0</em></button>
+      <button class="nav-item" data-filter="card"><span>Cards</span><em id="countCard">0</em></button>
+      <div class="section-label">TAGS</div>
+      <div id="tagList" class="tag-list"></div>
+    </nav>
+
+    <div class="health-card">
+      <div class="health-ring">86</div>
+      <div>
+        <div class="health-title">Vault health</div>
+        <div id="healthDetail" class="health-detail">0 weak · 0 expiring</div>
+      </div>
+    </div>
+    <button id="settingsBtn" class="nav-item settings-btn"><span>Settings</span></button>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" placeholder="Search vault" aria-label="Search vault">
+        <kbd>Ctrl F</kbd>
+      </div>
+      <button id="newItemBtn" class="btn primary">+ New item</button>
+      <button id="lockBtn" class="btn ghost">Lock</button>
+    </header>
+
+    <div class="content">
+      <section class="list-pane">
+        <div class="list-head"><span>NAME</span><span>USERNAME</span><span>UPDATED</span></div>
+        <div id="itemList" class="item-list"></div>
+        <div id="emptyState" class="empty-state hidden">No items here yet.</div>
+      </section>
+      <aside id="details" class="details"></aside>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden">
+    <div class="toast-row"><b id="toastText">Copied</b><span id="toastTimer">clears in 10s</span></div>
+    <div class="toast-track"><div id="toastBar" class="toast-bar"></div></div>
+  </div>
+</div>
+
+<div id="modalBackdrop" class="modal-backdrop hidden">
+  <div id="modal" class="modal" role="dialog" aria-modal="true"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

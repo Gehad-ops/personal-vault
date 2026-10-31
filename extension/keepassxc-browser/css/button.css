@@ -1,0 +1,58 @@
+.kpxc-button {
+    background-color: #fff;
+    background-image: none !important;
+    border: 1px solid #ccc !important;
+    border-radius: 9px !important;
+    font-size: 12px !important;
+    font-family: 'Lato', sans-serif !important;
+    height: 30px !important;
+    margin: .2em !important;
+    padding: 1px 7px 2px !important;
+    text-wrap: nowrap;
+}
+
+.kpxc-white-button {
+    background-color: #f6f8fa !important;
+    border-color: #d0d7de !important;
+    color: #1f2328 !important;
+}
+
+.kpxc-red-button {
+    background-color: #ff8f8f !important;
+    border-color: #ff8f8f !important;
+    color: #2a0b0b !important;
+}
+
+.kpxc-orange-button {
+    background-color: #f5b454 !important;
+    border-color: #f5b454 !important;
+    color: #2a1b04 !important;
+}
+
+.kpxc-blue-button {
+    background-color: #6ec1ff !important;
+    border-color: #6ec1ff !important;
+    color: #04231a !important;
+}
+
+.kpxc-green-button {
+    background-color: #2fbf8a !important;
+    border-color: #2fbf8a !important;
+    color: #04231a !important;
+}
+
+.kpxc-button:hover {
+    cursor: pointer !important;
+    filter: brightness(92%) !important;
+    transition: all .15s;
+}
+
+.kpxc-button:disabled, .kpxc-gray-button {
+    background-color: #16282b !important;
+    border-color: #1d2e31 !important;
+    color: #8fa8a6 !important;
+}
+
+.kpxc-button:disabled:hover {
+    background-color: #16282b !important;
+}
