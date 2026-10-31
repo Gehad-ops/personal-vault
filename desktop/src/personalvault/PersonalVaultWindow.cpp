@@ -1003,6 +1003,7 @@ void PersonalVaultWindow::refreshList()
         const auto [bg, fg] = avatarFor(title);
         auto* avatar = new QLabel(avatarLetter(title, userText));
         avatar->setObjectName("avatar");
+        avatar->setAlignment(Qt::AlignCenter);
         avatar->setFixedSize(34, 34);
         avatar->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:9px;font-weight:700;").arg(bg.name(), fg.name()));
         rowLayout->addWidget(avatar);
@@ -1083,6 +1084,7 @@ void PersonalVaultWindow::showDetails(Entry* entry)
     headLayout->setContentsMargins(0, 0, 0, 0);
     auto* avatar = new QLabel(avatarLetter(title, primaryUser(entry)));
     avatar->setObjectName("avatar");
+    avatar->setAlignment(Qt::AlignCenter);
     avatar->setFixedSize(48, 48);
     avatar->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:12px;font-size:18px;font-weight:700;").arg(bg.name(), fg.name()));
     headLayout->addWidget(avatar);
