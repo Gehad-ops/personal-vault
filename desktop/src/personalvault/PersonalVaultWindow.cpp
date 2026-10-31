@@ -26,6 +26,10 @@
 #include <QShortcut>
 #include <QSizeGrip>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QEnterEvent>
+#include <QPaintEvent>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QSettings>
 #include <QWindow>
@@ -213,6 +217,98 @@ private:
     QLineEdit* m_password = nullptr;
 };
 
+class WindowButton : public QPushButton
+{
+public:
+    enum class Kind
+    {
+        Minimize,
+        Maximize,
+        Restore,
+        Close
+    };
+
+    explicit WindowButton(Kind kind, QWidget* parent = nullptr)
+        : QPushButton(parent)
+        , m_kind(kind)
+    {
+        setFixedSize(42, 30);
+        setFlat(true);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setAttribute(Qt::WA_Hover, true);
+    }
+
+    void setKind(Kind kind)
+    {
+        m_kind = kind;
+        update();
+    }
+
+protected:
+    void enterEvent(QEnterEvent* event) override
+    {
+        QPushButton::enterEvent(event);
+        update();
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        QPushButton::leaveEvent(event);
+        update();
+    }
+
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const bool close = m_kind == Kind::Close;
+        if (underMouse()) {
+            p.fillRect(rect(), close ? QColor("#C42B1C") : QColor("#16282B"));
+        }
+        const QColor color = (close && underMouse()) ? QColor("#FFFFFF") : QColor("#C7D6D3");
+        QPen pen(color, 1.2);
+        pen.setCapStyle(Qt::RoundCap);
+        p.setPen(pen);
+        const qreal cx = width() / 2.0;
+        const qreal cy = height() / 2.0;
+
+        if (m_kind == Kind::Minimize) {
+            p.drawLine(QPointF(cx - 5, cy), QPointF(cx + 5, cy));
+        } else if (m_kind == Kind::Maximize) {
+            p.drawRect(QRectF(cx - 4.5, cy - 4.5, 9, 9));
+        } else if (m_kind == Kind::Restore) {
+            p.drawRect(QRectF(cx - 5.5, cy - 3.5, 9, 9));
+            p.drawRect(QRectF(cx - 2.5, cy - 6.5, 9, 9));
+        } else {
+            p.drawLine(QPointF(cx - 4, cy - 4), QPointF(cx + 4, cy + 4));
+            p.drawLine(QPointF(cx + 4, cy - 4), QPointF(cx - 4, cy + 4));
+        }
+    }
+
+private:
+    Kind m_kind;
+};
+
+QPixmap makeLogoPixmap(int size)
+{
+    QPixmap pm(size, size);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor("#123A33"));
+    p.drawRoundedRect(QRectF(0, 0, size, size), 10, 10);
+    QPen pen(QColor("#2FBF8A"), 2.0);
+    pen.setCapStyle(Qt::RoundCap);
+    p.setPen(pen);
+    const int cx = size / 2;
+    for (int i = -1; i <= 1; ++i) {
+        p.drawLine(cx - 6, size / 2 + i * 5, cx + 6, size / 2 + i * 5);
+    }
+    return pm;
+}
+
 class EntryDialog : public QDialog
 {
 public:
@@ -388,8 +484,9 @@ void PersonalVaultWindow::buildUi()
     auto* vaultHeaderLayout = new QHBoxLayout(vaultHeader);
     vaultHeaderLayout->setContentsMargins(0, 0, 0, 4);
     vaultHeaderLayout->setSpacing(10);
-    auto* vaultAvatar = new QLabel(QStringLiteral("▤"));
-    vaultAvatar->setObjectName("vaultAvatar");
+    auto* vaultAvatar = new QLabel();
+    vaultAvatar->setObjectName("vaultLogo");
+    vaultAvatar->setPixmap(makeLogoPixmap(36));
     vaultAvatar->setFixedSize(36, 36);
     auto* vaultText = new QVBoxLayout();
     vaultText->setContentsMargins(0, 0, 0, 0);
@@ -496,19 +593,22 @@ void PersonalVaultWindow::buildUi()
         lockVault();
         promptOpen();
     });
-    auto windowButton = [this](const QString& glyph, const char* name, const QString& tip) {
-        auto* b = new QPushButton(glyph);
-        b->setObjectName(QString::fromLatin1(name));
-        b->setFixedSize(34, 28);
-        b->setToolTip(tip);
-        b->setFocusPolicy(Qt::NoFocus);
-        return b;
-    };
-    auto* minimize = windowButton(QStringLiteral("—"), "winButton", tr("Minimize"));
-    auto* maximize = windowButton(QStringLiteral("▢"), "winButton", tr("Maximize"));
-    auto* closeButton = windowButton(QStringLiteral("✕"), "winClose", tr("Close"));
+    auto* minimize = new WindowButton(WindowButton::Kind::Minimize, topbar);
+    minimize->setToolTip(tr("Minimize"));
+    auto* maximize = new WindowButton(WindowButton::Kind::Maximize, topbar);
+    maximize->setToolTip(tr("Maximize"));
+    auto* closeButton = new WindowButton(WindowButton::Kind::Close, topbar);
+    closeButton->setToolTip(tr("Close"));
     connect(minimize, &QPushButton::clicked, this, &QWidget::showMinimized);
-    connect(maximize, &QPushButton::clicked, this, [this] { isMaximized() ? showNormal() : showMaximized(); });
+    connect(maximize, &QPushButton::clicked, this, [this, maximize] {
+        if (isMaximized()) {
+            showNormal();
+            maximize->setKind(WindowButton::Kind::Maximize);
+        } else {
+            showMaximized();
+            maximize->setKind(WindowButton::Kind::Restore);
+        }
+    });
     connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     topLayout->addWidget(m_search);
     topLayout->addStretch();
