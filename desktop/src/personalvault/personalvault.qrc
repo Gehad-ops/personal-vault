@@ -1,5 +1,6 @@
-<RCC>
+﻿<RCC>
     <qresource prefix="/">
         <file>personalvault.qss</file>
+        <file>check.svg</file>
     </qresource>
 </RCC>
