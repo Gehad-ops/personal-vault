@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QFont>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -25,6 +26,8 @@
 #include <QKeySequence>
 #include <QShortcut>
 #include <QSizeGrip>
+#include <QSlider>
+#include <QSpinBox>
 #include <QMouseEvent>
 #include <QIcon>
 #include <QPainter>
@@ -42,6 +45,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 #include "browser/BrowserService.h"
@@ -51,6 +55,7 @@
 #include "core/EntryAttributes.h"
 #include "core/Group.h"
 #include "core/Metadata.h"
+#include "core/PasswordGenerator.h"
 #include "core/Totp.h"
 #include "gui/widgets/ElidedLabel.h"
 #include "keys/CompositeKey.h"
@@ -311,6 +316,166 @@ QPixmap makeLogoPixmap(int size)
     return pm;
 }
 
+class PasswordGeneratorDialog : public QDialog
+{
+public:
+    explicit PasswordGeneratorDialog(QWidget* parent = nullptr)
+        : QDialog(parent)
+    {
+        setWindowTitle(tr("Generate password"));
+        setMinimumWidth(440);
+        auto* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(22, 22, 22, 18);
+        layout->setSpacing(12);
+
+        auto* previewRow = new QHBoxLayout();
+        m_preview = new QLineEdit();
+        m_preview->setReadOnly(true);
+        QFont mono = m_preview->font();
+        mono.setFamily(QStringLiteral("Consolas"));
+        mono.setStyleHint(QFont::Monospace);
+        mono.setPointSize(11);
+        m_preview->setFont(mono);
+        auto* copy = new QPushButton(tr("Copy"));
+        connect(copy, &QPushButton::clicked, this, [this] {
+            QApplication::clipboard()->setText(m_preview->text());
+        });
+        previewRow->addWidget(m_preview, 1);
+        previewRow->addWidget(copy);
+        layout->addLayout(previewRow);
+
+        m_strength = new QLabel();
+        m_strength->setObjectName("fieldLabel");
+        layout->addWidget(m_strength);
+
+        auto* lengthRow = new QHBoxLayout();
+        lengthRow->addWidget(new QLabel(tr("Length")));
+        m_length = new QSpinBox();
+        m_length->setRange(8, 128);
+        m_length->setValue(20);
+        m_length->setSuffix(tr(" chars"));
+        m_slider = new QSlider(Qt::Horizontal);
+        m_slider->setRange(8, 128);
+        m_slider->setValue(20);
+        lengthRow->addWidget(m_slider, 1);
+        lengthRow->addWidget(m_length);
+        layout->addLayout(lengthRow);
+
+        auto* options = new QGridLayout();
+        options->setHorizontalSpacing(18);
+        options->setVerticalSpacing(6);
+        m_upper = new QCheckBox(tr("Uppercase (A-Z)"));
+        m_lower = new QCheckBox(tr("Lowercase (a-z)"));
+        m_numbers = new QCheckBox(tr("Numbers (0-9)"));
+        m_symbols = new QCheckBox(tr("Symbols (!@#$...)"));
+        m_upper->setChecked(true);
+        m_lower->setChecked(true);
+        m_numbers->setChecked(true);
+        m_symbols->setChecked(true);
+        options->addWidget(m_upper, 0, 0);
+        options->addWidget(m_lower, 0, 1);
+        options->addWidget(m_numbers, 1, 0);
+        options->addWidget(m_symbols, 1, 1);
+        layout->addLayout(options);
+
+        m_exclude = new QCheckBox(tr("Exclude look-alike characters (O0Il1)"));
+        m_exclude->setChecked(true);
+        m_every = new QCheckBox(tr("Require every selected type"));
+        m_every->setChecked(true);
+        layout->addWidget(m_exclude);
+        layout->addWidget(m_every);
+
+        auto* footer = new QHBoxLayout();
+        auto* regenerate = new QPushButton(tr("Regenerate"));
+        auto* cancel = new QPushButton(tr("Cancel"));
+        m_use = new QPushButton(tr("Use password"));
+        m_use->setObjectName("primary");
+        connect(regenerate, &QPushButton::clicked, this, [this] { generate(); });
+        connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+        connect(m_use, &QPushButton::clicked, this, &QDialog::accept);
+        footer->addWidget(regenerate);
+        footer->addStretch();
+        footer->addWidget(cancel);
+        footer->addWidget(m_use);
+        layout->addLayout(footer);
+
+        connect(m_slider, &QSlider::valueChanged, m_length, &QSpinBox::setValue);
+        connect(m_length, QOverload<int>::of(&QSpinBox::valueChanged), m_slider, &QSlider::setValue);
+        connect(m_length, QOverload<int>::of(&QSpinBox::valueChanged), this, [this] { generate(); });
+        const QList<QCheckBox*> boxes{m_upper, m_lower, m_numbers, m_symbols, m_exclude, m_every};
+        for (auto* box : boxes) {
+            connect(box, &QCheckBox::toggled, this, [this] { generate(); });
+        }
+        generate();
+        m_use->setDefault(true);
+    }
+
+    QString password() const
+    {
+        return m_preview->text();
+    }
+
+private:
+    void generate()
+    {
+        PasswordGenerator::CharClasses classes = PasswordGenerator::NoClass;
+        if (m_upper->isChecked()) {
+            classes |= PasswordGenerator::UpperLetters;
+        }
+        if (m_lower->isChecked()) {
+            classes |= PasswordGenerator::LowerLetters;
+        }
+        if (m_numbers->isChecked()) {
+            classes |= PasswordGenerator::Numbers;
+        }
+        if (m_symbols->isChecked()) {
+            classes |= PasswordGenerator::SpecialCharacters;
+        }
+        if (classes == PasswordGenerator::NoClass) {
+            m_preview->clear();
+            m_strength->setText(tr("Select at least one character type"));
+            m_use->setEnabled(false);
+            return;
+        }
+
+        PasswordGenerator generator;
+        generator.setLength(m_length->value());
+        generator.setCharClasses(classes);
+        PasswordGenerator::GeneratorFlags flags = PasswordGenerator::NoFlags;
+        if (m_exclude->isChecked()) {
+            flags |= PasswordGenerator::ExcludeLookAlike;
+        }
+        if (m_every->isChecked()) {
+            flags |= PasswordGenerator::CharFromEveryGroup;
+        }
+        generator.setFlags(flags);
+        m_preview->setText(generator.generatePassword());
+
+        int pool = (m_upper->isChecked() ? 26 : 0) + (m_lower->isChecked() ? 26 : 0)
+                   + (m_numbers->isChecked() ? 10 : 0) + (m_symbols->isChecked() ? 32 : 0)
+                   - (m_exclude->isChecked() ? 4 : 0);
+        const double bits = m_length->value() * std::log2(std::max(2, pool));
+        const QString strength = bits >= 90   ? tr("Very strong")
+                                : bits >= 70 ? tr("Strong")
+                                : bits >= 50 ? tr("Fair")
+                                             : tr("Weak");
+        m_strength->setText(tr("%1 · about %2 bits").arg(strength).arg(qRound(bits)));
+        m_use->setEnabled(true);
+    }
+
+    QLineEdit* m_preview = nullptr;
+    QLabel* m_strength = nullptr;
+    QSpinBox* m_length = nullptr;
+    QSlider* m_slider = nullptr;
+    QCheckBox* m_upper = nullptr;
+    QCheckBox* m_lower = nullptr;
+    QCheckBox* m_numbers = nullptr;
+    QCheckBox* m_symbols = nullptr;
+    QCheckBox* m_exclude = nullptr;
+    QCheckBox* m_every = nullptr;
+    QPushButton* m_use = nullptr;
+};
+
 class EntryDialog : public QDialog
 {
 public:
@@ -332,7 +497,22 @@ public:
         m_title = addField(form, tr("Title"), entry ? entry->title() : QString());
         m_username = addField(form, tr("Username"), entry ? entry->username() : QString());
         m_url = addField(form, tr("Website"), entry ? entry->url() : QString());
-        m_password = addField(form, tr("Password"), entry ? entry->password() : QString(), true);
+        auto* passwordRow = new QWidget();
+        auto* passwordLayout = new QHBoxLayout(passwordRow);
+        passwordLayout->setContentsMargins(0, 0, 0, 0);
+        passwordLayout->setSpacing(8);
+        m_password = new QLineEdit(entry ? entry->password() : QString());
+        m_password->setEchoMode(QLineEdit::Password);
+        auto* generatePassword = new QPushButton(tr("Generate"));
+        passwordLayout->addWidget(m_password, 1);
+        passwordLayout->addWidget(generatePassword);
+        form->addRow(tr("Password"), passwordRow);
+        connect(generatePassword, &QPushButton::clicked, this, [this] {
+            PasswordGeneratorDialog dialog(this);
+            if (dialog.exec() == QDialog::Accepted) {
+                m_password->setText(dialog.password());
+            }
+        });
         m_secret = addField(form, tr("TOTP secret"), entry && entry->totpSettings() ? entry->totpSettings()->key : QString());
         m_holder = addField(form, tr("Cardholder"), entry ? entry->attributes()->value(CARD_HOLDER) : QString());
         m_number = addField(form, tr("Card number"), entry ? entry->attributes()->value(CARD_NUMBER) : QString());
@@ -364,7 +544,7 @@ public:
         // setRowVisible hides the label together with the field (setVisible left orphan labels behind).
         form->setRowVisible(m_username, type != QStringLiteral("Card"));
         form->setRowVisible(m_url, type == QStringLiteral("Password"));
-        form->setRowVisible(m_password, type == QStringLiteral("Password"));
+        form->setRowVisible(passwordRow, type == QStringLiteral("Password"));
         form->setRowVisible(m_secret, type == QStringLiteral("TOTP"));
         form->setRowVisible(m_holder, type == QStringLiteral("Card"));
         form->setRowVisible(m_number, type == QStringLiteral("Card"));
@@ -591,6 +771,13 @@ void PersonalVaultWindow::buildUi()
     auto* add = new QPushButton(tr("+ New item"));
     add->setObjectName("primary");
     connect(add, &QPushButton::clicked, this, &PersonalVaultWindow::addItem);
+    auto* generate = new QPushButton(tr("Generate"));
+    connect(generate, &QPushButton::clicked, this, [this] {
+        PasswordGeneratorDialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted) {
+            copyText(dialog.password(), tr("Password"));
+        }
+    });
     auto* lockTop = new QPushButton(tr("Lock"));
     connect(lockTop, &QPushButton::clicked, this, [this] {
         lockVault();
@@ -615,6 +802,7 @@ void PersonalVaultWindow::buildUi()
     connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     topLayout->addWidget(m_search);
     topLayout->addStretch();
+    topLayout->addWidget(generate);
     topLayout->addWidget(add);
     topLayout->addWidget(lockTop);
     topLayout->addSpacing(8);
