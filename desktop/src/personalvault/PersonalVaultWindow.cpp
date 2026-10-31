@@ -47,6 +47,7 @@
 #include "core/Group.h"
 #include "core/Metadata.h"
 #include "core/Totp.h"
+#include "gui/widgets/ElidedLabel.h"
 #include "keys/CompositeKey.h"
 #include "keys/PasswordKey.h"
 #include "format/BitwardenReader.h"
@@ -78,6 +79,26 @@ QPair<QColor, QColor> avatarFor(const QString& title)
         hash = hash * 31 + ch.unicode();
     }
     return avatarPalette().at(hash % avatarPalette().size());
+}
+
+QString avatarLetter(const QString& title, const QString& user)
+{
+    for (const auto ch : title) {
+        if (ch.isLetter()) {
+            return QString(ch).toUpper();
+        }
+    }
+    for (const auto ch : user) {
+        if (ch.isLetter()) {
+            return QString(ch).toUpper();
+        }
+    }
+    for (const auto ch : title) {
+        if (ch.isLetterOrNumber()) {
+            return QString(ch).toUpper();
+        }
+    }
+    return QStringLiteral("K");
 }
 
 QString prettyType(const QString& type)
@@ -502,6 +523,7 @@ void PersonalVaultWindow::buildUi()
     auto* splitter = new QSplitter(Qt::Horizontal);
     m_list = new QListWidget();
     m_list->setSpacing(2);
+    m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     connect(m_list, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
         if (!item) {
             m_current = nullptr;
@@ -511,11 +533,39 @@ void PersonalVaultWindow::buildUi()
         m_current = reinterpret_cast<Entry*>(item->data(Qt::UserRole).toULongLong());
         showDetails(m_current);
     });
-    splitter->addWidget(m_list);
+
+    auto* listPane = new QWidget();
+    auto* listLayout = new QVBoxLayout(listPane);
+    listLayout->setContentsMargins(0, 0, 0, 0);
+    listLayout->setSpacing(0);
+    auto* listHeader = new QWidget();
+    listHeader->setObjectName("listHeader");
+    auto* headerLayout = new QHBoxLayout(listHeader);
+    headerLayout->setContentsMargins(10, 6, 10, 6);
+    headerLayout->setSpacing(10);
+    headerLayout->addSpacing(44);
+    auto* nameHeader = new QLabel(tr("NAME"));
+    nameHeader->setObjectName("listHeaderLabel");
+    headerLayout->addWidget(nameHeader, 1);
+    auto* userHeader = new QLabel(tr("USERNAME"));
+    userHeader->setObjectName("listHeaderLabel");
+    userHeader->setFixedWidth(220);
+    headerLayout->addWidget(userHeader);
+    auto* updatedHeader = new QLabel(tr("UPDATED"));
+    updatedHeader->setObjectName("listHeaderLabel");
+    updatedHeader->setFixedWidth(70);
+    updatedHeader->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    headerLayout->addWidget(updatedHeader);
+    listLayout->addWidget(listHeader);
+    listLayout->addWidget(m_list, 1);
+    splitter->addWidget(listPane);
 
     auto* scroll = new QScrollArea();
     scroll->setWidgetResizable(true);
-    scroll->setMinimumWidth(320);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setAlignment(Qt::AlignTop);
+    scroll->setMinimumWidth(340);
+    scroll->setMaximumWidth(430);
     m_details = new QWidget();
     m_detailsLayout = new QVBoxLayout(m_details);
     m_detailsLayout->setContentsMargins(18, 18, 18, 18);
@@ -524,7 +574,7 @@ void PersonalVaultWindow::buildUi()
     splitter->addWidget(scroll);
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 0);
-    splitter->setSizes({760, 360});
+    splitter->setSizes({760, 380});
     mainLayout->addWidget(splitter, 1);
 
     root->addWidget(main, 1);
@@ -846,8 +896,9 @@ void PersonalVaultWindow::refreshList()
         rowLayout->setSpacing(10);
 
         const auto title = entry->title().isEmpty() ? tr("Untitled") : entry->title();
+        const auto userText = primaryUser(entry);
         const auto [bg, fg] = avatarFor(title);
-        auto* avatar = new QLabel(title.left(1).toUpper());
+        auto* avatar = new QLabel(avatarLetter(title, userText));
         avatar->setObjectName("avatar");
         avatar->setFixedSize(34, 34);
         avatar->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:9px;font-weight:700;").arg(bg.name(), fg.name()));
@@ -856,23 +907,28 @@ void PersonalVaultWindow::refreshList()
         auto* textLayout = new QVBoxLayout();
         textLayout->setContentsMargins(0, 0, 0, 0);
         textLayout->setSpacing(0);
-        auto* titleLabel = new QLabel(entry->tagList().contains(QStringLiteral("Favorite"), Qt::CaseInsensitive)
-                                          ? QStringLiteral("★ ") + title
-                                          : title);
+        auto* titleLabel = new ElidedLabel();
         titleLabel->setObjectName("rowTitle");
+        titleLabel->setRawText(entry->tagList().contains(QStringLiteral("Favorite"), Qt::CaseInsensitive)
+                                   ? QStringLiteral("★ ") + title
+                                   : title);
+        titleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         auto* subLabel = new QLabel(prettyType(typeOf(entry)));
         subLabel->setObjectName("rowSub");
         textLayout->addWidget(titleLabel);
         textLayout->addWidget(subLabel);
         rowLayout->addLayout(textLayout, 1);
 
-        auto* user = new QLabel(primaryUser(entry));
+        auto* user = new ElidedLabel();
         user->setObjectName("rowUser");
-        user->setMinimumWidth(120);
+        user->setRawText(userText);
+        user->setFixedWidth(220);
         rowLayout->addWidget(user);
 
         auto* date = new QLabel(updatedText(entry));
         date->setObjectName("rowDate");
+        date->setFixedWidth(70);
+        date->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         rowLayout->addWidget(date);
 
         m_list->setItemWidget(item, row);
@@ -899,7 +955,6 @@ void PersonalVaultWindow::clearDetails()
     auto* empty = new QLabel(m_db ? tr("Select an item") : tr("Vault is locked"));
     empty->setObjectName("mutedLabel");
     empty->setAlignment(Qt::AlignCenter);
-    m_detailsLayout->addStretch();
     m_detailsLayout->addWidget(empty);
     if (!m_db) {
         auto* open = new QPushButton(tr("Open vault"));
@@ -923,17 +978,23 @@ void PersonalVaultWindow::showDetails(Entry* entry)
     auto* head = new QWidget();
     auto* headLayout = new QHBoxLayout(head);
     headLayout->setContentsMargins(0, 0, 0, 0);
-    auto* avatar = new QLabel(title.left(1).toUpper());
+    auto* avatar = new QLabel(avatarLetter(title, primaryUser(entry)));
     avatar->setObjectName("avatar");
     avatar->setFixedSize(48, 48);
     avatar->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:12px;font-size:18px;font-weight:700;").arg(bg.name(), fg.name()));
     headLayout->addWidget(avatar);
 
     auto* headText = new QVBoxLayout();
-    auto* titleLabel = new QLabel(title);
+    auto* titleLabel = new ElidedLabel();
     titleLabel->setObjectName("detailTitle");
-    auto* subLabel = new QLabel(entry->url().isEmpty() ? primaryUser(entry) : entry->url());
+    titleLabel->setRawText(title);
+    titleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    auto* subLabel = new ElidedLabel();
     subLabel->setObjectName("detailSub");
+    const auto subText = entry->url().isEmpty() ? primaryUser(entry) : entry->url();
+    subLabel->setRawText(subText);
+    subLabel->setToolTip(subText);
+    subLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     headText->addWidget(titleLabel);
     headText->addWidget(subLabel);
     headLayout->addLayout(headText, 1);
@@ -963,6 +1024,8 @@ void PersonalVaultWindow::showDetails(Entry* entry)
         auto* text = new QLabel(value.isEmpty() ? QStringLiteral("—") : value);
         text->setObjectName("fieldValue");
         text->setWordWrap(true);
+        text->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        text->setMinimumWidth(0);
         text->setTextInteractionFlags(Qt::TextSelectableByMouse);
         row->addWidget(text, 1);
         if (copy) {
@@ -1019,6 +1082,8 @@ void PersonalVaultWindow::showDetails(Entry* entry)
                                      : type == QStringLiteral("card") ? tr("Copy card number")
                                                                      : tr("Copy credential ID"));
     copyMain->setObjectName("primary");
+    copyMain->setMinimumHeight(38);
+    copyMain->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(copyMain, &QPushButton::clicked, this, [this, entry, type] {
         if (type == QStringLiteral("password")) {
             copyText(entry->password(), tr("Password"));

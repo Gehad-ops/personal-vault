@@ -111,3 +111,21 @@ QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
 QScrollBar::handle:horizontal { background: #1D2E31; border-radius: 4px; min-width: 30px; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 QCheckBox { spacing: 8px; background: transparent; }
+
+/* List header */
+QWidget#listHeader {
+    background-color: #0B1315;
+    border-bottom: 1px solid #16282B;
+}
+QLabel#listHeaderLabel {
+    color: #8FA8A6;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 4px 0;
+}
+
+ElidedLabel#rowTitle { font-weight: 700; }
+ElidedLabel#rowUser { color: #B7CCC9; }
+ElidedLabel#detailTitle { font-size: 18px; font-weight: 700; color: #E4F0EE; }
+ElidedLabel#detailSub { color: #6EC1FF; font-size: 12px; }
