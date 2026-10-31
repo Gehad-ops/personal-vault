@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Vault - Extension Test Page</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #070c0e;
+    --panel: #0e1719;
+    --panel-2: #132124;
+    --border: #1d2e31;
+    --text: #e4f0ee;
+    --muted: #8fa8a6;
+    --accent: #2fbf8a;
+    --accent-2: #123a33;
+    --danger: #ff8f8f;
+    --warning: #f5b454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 480px at 12% -10%, #123a3355, transparent 65%),
+      radial-gradient(700px 420px at 100% 0%, #1b2f4055, transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  .page { max-width: 1180px; margin: 0 auto; padding: 34px 22px 60px; }
+  header { margin-bottom: 26px; }
+  h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -0.02em; }
+  .sub { margin: 0; color: var(--muted); max-width: 780px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+    padding: 7px 11px; border: 1px solid var(--border); border-radius: 999px;
+    background: #0b1315; color: var(--muted); font-size: 12px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card {
+    background: linear-gradient(180deg, #101c1f, #0c1517);
+    border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  h2 { margin: 0 0 4px; font-size: 16px; }
+  .hint { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  form.stack { display: grid; gap: 11px; }
+  label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  input {
+    width: 100%; height: 38px; padding: 0 11px; color: var(--text);
+    background: #091113; border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; font-weight: 400; text-transform: none; letter-spacing: 0;
+  }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #2fbf8a22; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:hover { border-color: #2c4a4d; background: #17282b; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #04231a; }
+  button.primary:hover { background: #35d39a; border-color: #35d39a; }
+  button.ghost { background: transparent; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .separator { height: 1px; background: var(--border); margin: 2px 0; }
+  .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 2px; }
+  .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+  .note strong { color: var(--text); }
+  #dynamic-slot:empty::before { content: "Dynamic form appears here."; color: var(--muted); font-size: 13px; }
+  #log {
+    height: 210px; overflow: auto; padding: 12px; border-radius: 10px;
+    background: #060b0c; border: 1px solid var(--border);
+    font: 12px/1.55 Consolas, "Courier New", monospace;
+  }
+  .line { display: grid; grid-template-columns: 78px 58px 1fr; gap: 8px; padding: 2px 0; }
+  .time { color: #5f7a78; }
+  .kind { color: var(--accent); }
+  .kind.error { color: var(--danger); }
+  .kind.warn { color: var(--warning); }
+  .kind.ok { color: #8fe4c4; }
+  .empty { color: var(--muted); }
+  footer { margin-top: 22px; color: #5f7a78; font-size: 12px; }
+  code { color: #b7ccc9; background: #091113; border: 1px solid var(--border); padding: 1px 5px; border-radius: 5px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Personal Vault - Extension Test Page</h1>
+    <p class="sub">Use this page to check autofill, save prompts, password updates, the password generator, dynamic forms, TOTP, and passkeys. Serve it over HTTP, not <code>file://</code>.</p>
+    <div class="badge"><span class="dot"></span><span id="origin-label">loading origin...</span></div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>1. Login / autofill</h2>
+      <p class="hint">Associate the extension, then use the extension icon or popup to fill this form.</p>
+      <form id="login-form" class="stack" autocomplete="on">
+        <label>Email or username
+          <input id="login-username" name="username" type="text" autocomplete="username" placeholder="you@example.com">
+        </label>
+        <label>Password
+          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Password">
+        </label>
+        <label>TOTP code (optional)
+          <input id="login-totp" name="totp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456">
+        </label>
+        <div class="actions">
+          <button class="primary" type="submit">Sign in</button>
+          <button class="ghost" type="button" data-reset>Reset</button>
+        </div>
+      </form>
+      <p class="note">The form is intercepted locally, so nothing is sent anywhere.</p>
+    </section>
+
+    <section class="card">
+      <h2>2. Create account / save prompt</h2>
+      <p class="hint">Submit this form to test the extension's save/update prompt.</p>
+      <form id="signup-form" class="stack" autocomplete="on">
+        <label>Email
+          <input id="signup-email" name="email" type="email" autocomplete="email" placeholder="new@example.com">
+        </label>
+        <label>New password
+          <input id="signup-password" name="new-password" type="password" autocomplete="new-password" placeholder="Use the extension generator">
+        </label>
+        <label>Confirm password
+          <input id="signup-confirm" name="confirm-password" type="password" autocomplete="new-password" placeholder="Repeat password">
+        </label>
+        <div class="actions">
+          <button class="primary" type="submit">Create account</button>
+          <button class="ghost" type="button" data-reset>Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>3. Change password</h2>
+      <p class="hint">Submit this to test “update password” behavior and multi-field save detection.</p>
+      <form id="change-form" class="stack" autocomplete="on">
+        <label>Current password
+          <input id="change-current" name="current-password" type="password" autocomplete="current-password" placeholder="Current password">
+        </label>
+        <label>New password
+          <input id="change-new" name="new-password" type="password" autocomplete="new-password" placeholder="New password">
+        </label>
+        <label>Confirm new password
+          <input id="change-confirm" name="confirm-password" type="password" autocomplete="new-password" placeholder="Repeat new password">
+        </label>
+        <div class="actions">
+          <button class="primary" type="submit">Change password</button>
+          <button class="ghost" type="button" data-reset>Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>4. Standalone generator</h2>
+      <p class="hint">Focus this password field, then use the extension icon, inline key, or popup generator.</p>
+      <form id="generator-form" class="stack" autocomplete="off">
+        <label>Generated password
+          <input id="generator-password" name="generated-password" type="password" autocomplete="new-password" placeholder="Click the extension's key icon">
+        </label>
+        <div class="actions">
+          <button type="button" id="focus-generator">Focus field</button>
+          <button class="ghost" type="button" data-reset>Clear</button>
+        </div>
+      </form>
+      <p class="note">The extension's generator uses the KeePassXC password profile.</p>
+    </section>
+
+    <section class="card wide">
+      <h2>5. Dynamic form (SPA test)</h2>
+      <p class="hint">Injects a login form after a short delay to test MutationObserver behavior.</p>
+      <div class="actions">
+        <button class="primary" type="button" id="inject-form">Inject login form</button>
+        <button class="ghost" type="button" id="clear-dynamic">Clear</button>
+      </div>
+      <div id="dynamic-slot" style="margin-top: 14px"></div>
+    </section>
+
+    <section class="card wide">
+      <h2>6. Passkey / WebAuthn (optional)</h2>
+      <p class="hint">localhost is a secure context, so the browser accepts WebAuthn here. Register once, then sign in. The extension may intercept these prompts if passkeys are enabled.</p>
+      <div class="actions">
+        <button class="primary" type="button" id="passkey-register">Register passkey</button>
+        <button type="button" id="passkey-login">Sign in with passkey</button>
+        <button class="ghost" type="button" id="passkey-clear">Forget local credential</button>
+      </div>
+      <p class="note" id="passkey-status">No passkey registered in this browser profile yet.</p>
+    </section>
+
+    <section class="card wide">
+      <h2>Event log</h2>
+      <p class="hint">Form submissions and passkey results appear here. Password values are never logged.</p>
+      <div id="log"><div class="empty">Waiting for events...</div></div>
+      <div class="actions" style="margin-top: 10px">
+        <button class="ghost" type="button" id="clear-log">Clear log</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Personal Vault test page. Open <code>http://localhost:8765/</code> after starting the bundled static server.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const logEl = document.getElementById('log');
+  const originLabel = document.getElementById('origin-label');
+  originLabel.textContent = location.origin;
+
+  const time = () => new Date().toLocaleTimeString([], { hour12: false });
+  const log = (message, kind = 'info') => {
+    const empty = logEl.querySelector('.empty');
+    if (empty) empty.remove();
+    const line = document.createElement('div');
+    line.className = 'line';
+    const t = document.createElement('span');
+    t.className = 'time';
+    t.textContent = time();
+    const k = document.createElement('span');
+    k.className = 'kind ' + kind;
+    k.textContent = kind.toUpperCase();
+    const m = document.createElement('span');
+    m.textContent = message;
+    line.append(t, k, m);
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  const val = id => document.getElementById(id)?.value ?? '';
+  const bind = (formId, name, summary) => {
+    const form = document.getElementById(formId);
+    if (!form) return;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      log(name + ' submitted: ' + summary(), 'ok');
+      if (formId === 'signup-form' && val('signup-password') !== val('signup-confirm')) {
+        log('Signup passwords do not match.', 'warn');
+      }
+      if (formId === 'change-form' && val('change-new') !== val('change-confirm')) {
+        log('New passwords do not match.', 'warn');
+      }
+    });
+  };
+
+  bind('login-form', 'Login', () => 'username=' + (val('login-username') || '(empty)') + ', password=' + (val('login-password') ? '(set)' : '(empty)') + ', totp=' + (val('login-totp') ? '(set)' : '(empty)'));
+  bind('signup-form', 'Signup', () => 'email=' + (val('signup-email') || '(empty)') + ', password=' + (val('signup-password') ? '(set)' : '(empty)'));
+  bind('change-form', 'Change password', () => 'current=' + (val('change-current') ? '(set)' : '(empty)') + ', new=' + (val('change-new') ? '(set)' : '(empty)'));
+
+  document.querySelectorAll('[data-reset]').forEach(button => {
+    button.addEventListener('click', () => {
+      const form = button.closest('form');
+      if (form) form.reset();
+      log('Form reset.', 'info');
+    });
+  });
+
+  document.getElementById('focus-generator').addEventListener('click', () => {
+    document.getElementById('generator-password').focus();
+    log('Generator field focused.', 'info');
+  });
+
+  document.getElementById('inject-form').addEventListener('click', () => {
+    const slot = document.getElementById('dynamic-slot');
+    slot.innerHTML = `
+      <form id="dynamic-login" class="stack" autocomplete="on" style="margin-top: 4px">
+        <label>Dynamic username
+          <input name="username" type="text" autocomplete="username" placeholder="you@example.com">
+        </label>
+        <label>Dynamic password
+          <input name="password" type="password" autocomplete="current-password" placeholder="Password">
+        </label>
+        <div class="actions"><button class="primary" type="submit">Sign in</button></div>
+      </form>`;
+    const form = document.getElementById('dynamic-login');
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const data = new FormData(form);
+      log('Dynamic login submitted: username=' + (data.get('username') || '(empty)') + ', password=' + (data.get('password') ? '(set)' : '(empty)'), 'ok');
+    });
+    log('Dynamic login form injected.', 'ok');
+  });
+
+  document.getElementById('clear-dynamic').addEventListener('click', () => {
+    document.getElementById('dynamic-slot').innerHTML = '';
+    log('Dynamic form cleared.', 'info');
+  });
+
+  document.getElementById('clear-log').addEventListener('click', () => {
+    logEl.innerHTML = '<div class="empty">Waiting for events...</div>';
+  });
+
+  // WebAuthn helpers
+  const PASSKEY_KEY = 'pv-test-passkey-id';
+  const b64 = buffer => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const unb64 = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+  const random = size => crypto.getRandomValues(new Uint8Array(size));
+  const passkeyStatus = document.getElementById('passkey-status');
+
+  const refreshPasskeyStatus = () => {
+    const saved = localStorage.getItem(PASSKEY_KEY);
+    passkeyStatus.textContent = saved
+      ? 'A passkey credential is stored locally. Use “Sign in with passkey”.'
+      : 'No passkey registered in this browser profile yet.';
+  };
+
+  document.getElementById('passkey-register').addEventListener('click', async () => {
+    if (!window.PublicKeyCredential) {
+      log('WebAuthn is not available in this browser.', 'error');
+      return;
+    }
+    try {
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: random(32),
+          rp: { name: 'Personal Vault Test', id: location.hostname },
+          user: {
+            id: random(16),
+            name: 'test@example.com',
+            displayName: 'Personal Vault Test User'
+          },
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 },
+            { type: 'public-key', alg: -257 }
+          ],
+          authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+          timeout: 60000,
+          attestation: 'none'
+        }
+      });
+      if (!credential) {
+        log('Passkey registration returned no credential.', 'warn');
+        return;
+      }
+      localStorage.setItem(PASSKEY_KEY, b64(credential.rawId));
+      refreshPasskeyStatus();
+      log('Passkey registered: ' + b64(credential.rawId).slice(0, 18) + '...', 'ok');
+    } catch (error) {
+      log('Passkey registration failed: ' + (error?.message || error), 'error');
+    }
+  });
+
+  document.getElementById('passkey-login').addEventListener('click', async () => {
+    const saved = localStorage.getItem(PASSKEY_KEY);
+    if (!saved) {
+      log('Register a passkey first.', 'warn');
+      return;
+    }
+    try {
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: random(32),
+          rpId: location.hostname,
+          allowCredentials: [{ type: 'public-key', id: unb64(saved) }],
+          userVerification: 'preferred',
+          timeout: 60000
+        }
+      });
+      log(assertion ? 'Passkey sign-in succeeded.' : 'Passkey sign-in returned no assertion.', assertion ? 'ok' : 'warn');
+    } catch (error) {
+      log('Passkey sign-in failed: ' + (error?.message || error), 'error');
+    }
+  });
+
+  document.getElementById('passkey-clear').addEventListener('click', () => {
+    localStorage.removeItem(PASSKEY_KEY);
+    refreshPasskeyStatus();
+    log('Local passkey reference removed. The credential may still exist in the authenticator.', 'warn');
+  });
+
+  refreshPasskeyStatus();
+  log('Test page ready on ' + location.origin, 'ok');
+})();
+</script>
+</body>
+</html>
